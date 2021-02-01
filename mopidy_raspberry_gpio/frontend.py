@@ -2,7 +2,8 @@ import logging
 
 import pykka
 from mopidy import core
-
+import time
+from mopidy_raspberry_gpio.sound import play_sound
 logger = logging.getLogger(__name__)
 
 
@@ -14,9 +15,11 @@ class RaspberryGPIOFrontend(pykka.ThreadingActor, core.CoreListener):
         self.core = core
         self.config = config["raspberry-gpio"]
         self.pin_settings = {}
+        self.last_pin_action = {}
 
         GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BCM)
+        #GPIO.setmode(GPIO.BCM)
+        GPIO.setmode(GPIO.BOARD)
 
         # Iterate through any bcmN pins in the config
         # and set them up as inputs with edge detection
@@ -41,50 +44,52 @@ class RaspberryGPIOFrontend(pykka.ThreadingActor, core.CoreListener):
                     callback=self.gpio_event,
                     bouncetime=settings.bouncetime,
                 )
-
+                self.last_pin_action[pin] = round(time.time() * 1000)
                 self.pin_settings[pin] = settings
 
     def gpio_event(self, pin):
-        settings = self.pin_settings[pin]
-        self.dispatch_input(settings)
+        time_now = round(time.time() * 1000)
+        logger.info('GPIO event pin: %s, time %s', pin, time_now)
+        if time_now - self.last_pin_action[pin] > 1000:
+           self.last_pin_action[pin] = time_now
+           logger.info('triggering action for pin %s', pin)
+           settings = self.pin_settings[pin]
+           self.dispatch_input(settings.event)
 
-    def dispatch_input(self, settings):
-        handler_name = f"handle_{settings.event}"
+    def dispatch_input(self, event):
+        handler_name = f"handle_{event}"
         try:
-            getattr(self, handler_name)(settings.options)
+            getattr(self, handler_name)()
         except AttributeError:
             raise RuntimeError(
-                f"Could not find input handler for event: {settings.event}"
+                f"Could not find input handler for event: {event}"
             )
 
-    def handle_play_pause(self, config):
+    def handle_play_pause(self):
+        play_sound('success.mp3')
         if self.core.playback.get_state().get() == core.PlaybackState.PLAYING:
             self.core.playback.pause()
         else:
             self.core.playback.play()
 
-    def handle_play_stop(self, config):
-        if self.core.playback.get_state().get() == core.PlaybackState.PLAYING:
-            self.core.playback.stop()
-        else:
-            self.core.playback.play()
-
-    def handle_next(self, config):
+    def handle_next(self):
+        play_sound('success.mp3')
         self.core.playback.next()
 
-    def handle_prev(self, config):
+    def handle_prev(self):
+        play_sound('success.mp3')
         self.core.playback.previous()
 
-    def handle_volume_up(self, config):
-        step = int(config.get("step", 5))
+    def handle_volume_up(self):
+        play_sound('success.mp3')
         volume = self.core.mixer.get_volume().get()
-        volume += step
+        volume += 5
         volume = min(volume, 100)
         self.core.mixer.set_volume(volume)
 
-    def handle_volume_down(self, config):
-        step = int(config.get("step", 5))
+    def handle_volume_down(self):
+        play_sound('success.mp3')
         volume = self.core.mixer.get_volume().get()
-        volume -= step
+        volume -= 5
         volume = max(volume, 0)
         self.core.mixer.set_volume(volume)

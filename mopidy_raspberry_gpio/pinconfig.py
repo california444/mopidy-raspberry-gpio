@@ -12,12 +12,10 @@ class ValidList(list):
 
 
 class PinConfig(config.ConfigValue):
-    tuple_pinconfig = namedtuple(
-        "PinConfig", ("event", "active", "bouncetime", "options")
-    )
+    tuple_pinconfig = namedtuple("PinConfig", ("event", "active", "bouncetime"))
 
     valid_events = ValidList(
-        ["play_pause", "play_stop", "prev", "next", "volume_up", "volume_down"]
+        ["play_pause", "prev", "next", "volume_up", "volume_down"]
     )
 
     valid_modes = ValidList(["active_low", "active_high"])
@@ -31,13 +29,10 @@ class PinConfig(config.ConfigValue):
 
         value = types.decode(value).strip()
 
-        value = value.split(",")
-
-        # At least Event, Active and Bouncetime settings required
-        if len(value) < 3:
+        try:
+            event, active, bouncetime = value.split(",")
+        except ValueError:
             return None
-
-        event, active, bouncetime = value[0:3]
 
         if event not in self.valid_events:
             raise ValueError(
@@ -56,17 +51,10 @@ class PinConfig(config.ConfigValue):
                 f"invalid bouncetime value for pin config {bouncetime}"
             )
 
-        options = {}
-
-        for option in value[3:]:
-            key, value = option.split("=")
-            options[key] = value
-
-        return self.tuple_pinconfig(event, active, bouncetime, options)
+        return self.tuple_pinconfig(event, active, bouncetime)
 
     def serialize(self, value, display=False):
         if value is None:
             return ""
-        options = ",".join({f"{k}={v}" for k, v in value.options.items()})
-        value = f"{value.event},{value.active},{value.bouncetime},{options}"
+        value = f"{value.event},{value.active},{value.bouncetime}"
         return types.encode(value)

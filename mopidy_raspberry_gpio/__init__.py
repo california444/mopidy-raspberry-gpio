@@ -22,7 +22,7 @@ class Extension(ext.Extension):
 
     def get_config_schema(self):
         schema = super().get_config_schema()
-        for pin in range(28):
+        for pin in range(38):
             schema[f"bcm{pin:d}"] = PinConfig()
         return schema
 
